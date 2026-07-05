@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>抖音弹幕接收大屏</title>
+    <script src="./DouyinLiveWS.js"></script>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; background: #f5f5f5; padding: 20px; }
+        #chat-box { height: 400px; overflow-y: auto; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .msg-sys { color: #888; font-size: 12px; }
+        .msg-chat { color: #333; margin: 5px 0;}
+        .msg-gift { color: #e74c3c; font-weight: bold; margin: 5px 0;}
+        .nickname { color: #3498db; font-weight: bold; margin-right: 8px;}
+    </style>
+</head>
+<body>
+
+    <h2>抖音直播弹幕监听台</h2>
+    <h4 id="status-text" style="color: #e67e22;">状态: 等待连接...</h4>
+    <div id="chat-box"></div>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const statusText = document.getElementById('status-text');
+
+        function appendLog(htmlContent) {
+            const div = document.createElement('div');
+            div.innerHTML = htmlContent;
+            chatBox.appendChild(div);
+            // 自动滚动到底部
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // 1. 初始化客户端 (这里填入你想监听的抖音直播间ID)
+        const client = new DouyinLiveWS({
+            roomId: '516466932480', // 替换为你需要测试的直播间ID
+            host: '127.0.0.1',
+            port: 1088
+        });
+
+        // 2. 监听连接成功事件
+        client.on('connected', () => {
+            statusText.innerText = "状态: 本地WebSocket已连接";
+        });
+
+        // 3. 监听直播间状态事件 (开播/未开播)
+        client.on('live_status', (data) => {
+            statusText.innerText = `状态: ${data.message} (直播状态: ${data.live ? '🔴正在直播' : '⚪未开播'})`;
+            appendLog(`<span class="msg-sys">--- 系统通知: ${data.message} ---</span>`);
+        });
+
+        // 4. 监听弹幕消息 (WebcastChatMessage)
+        client.on('WebcastChatMessage', (msg) => {
+            const nickname = msg.user?.nickname || '未知用户';
+            const content = msg.content || '';
+            appendLog(`<div class="msg-chat"><span class="nickname">${nickname}:</span>${content}</div>`);
+        });
+
+        // 5. 监听礼物消息 (WebcastGiftMessage)
+        client.on('WebcastGiftMessage', (msg) => {
+            const nickname = msg.user?.nickname || '未知用户';
+            const giftName = msg.gift?.name || '未知礼物';
+            const giftCount = msg.count || 1;
+            appendLog(`<div class="msg-gift"><span class="nickname">${nickname}</span>送出了 ${giftName} x ${giftCount}</div>`);
+        });
+
+        // 6. 监听进场消息 (WebcastMemberMessage)
+        client.on('WebcastMemberMessage', (msg) => {
+            const nickname = msg.user?.nickname || '未知用户';
+            appendLog(`<div class="msg-sys">欢迎 <span class="nickname">${nickname}</span> 进入直播间</div>`);
+        });
+
+        // 7. 发起连接
+        client.connect();
+
+    </script>
+</body>
+</html>
