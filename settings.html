@@ -9,7 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="./icons/icon.svg">
   <link rel="stylesheet" href="./css/styles.css">
 </head>
-<body style="background:#0f172a">
+<body style="background:var(--bg-dark)">
   <div class="page">
 
     <div class="page-header">
@@ -45,6 +45,90 @@
       <div class="btn-row">
         <button class="btn btn-primary" id="btn-save-config">保存配置</button>
         <button class="btn btn-ghost" id="btn-test-config">测试连接</button>
+      </div>
+    </div>
+
+    <!-- 答题设置 -->
+    <div class="card">
+      <h2>🎮 答题设置</h2>
+
+      <div class="switch-row">
+        <div class="switch-label">
+          <div class="title">答题模式</div>
+          <div class="desc">手动：点击下一题切换；自动：倒计时结束自动下一题</div>
+        </div>
+        <div class="seg" id="seg-answer-mode">
+          <button data-val="manual" class="active">手动</button>
+          <button data-val="auto">自动</button>
+        </div>
+      </div>
+
+      <div class="switch-row">
+        <div class="switch-label">
+          <div class="title">科目答题</div>
+          <div class="desc">开启后仅答指定科目题目；关闭则全部题目随机作答</div>
+        </div>
+        <div class="switch" id="sw-subject-mode"></div>
+      </div>
+
+      <div class="field" id="subject-filter-wrap" style="display:none">
+        <label>选择答题科目</label>
+        <select id="cfg-subject-filter">
+          <option value="">请选择科目</option>
+        </select>
+      </div>
+
+      <div class="switch-row">
+        <div class="switch-label">
+          <div class="title">自动答题间隔</div>
+          <div class="desc">自动模式下，每题倒计时秒数</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="number" id="cfg-countdown" value="15" min="3" max="120"
+                 style="width:70px;padding:6px 8px;border-radius:8px;border:1px solid rgba(148,163,184,.2);background:#0f172a;color:var(--text)">
+          <span style="font-size:12px;color:var(--text-dim)">秒</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主题选择 -->
+    <div class="card">
+      <h2>🎨 主题风格</h2>
+      <div class="theme-grid" id="theme-grid">
+        <div class="theme-item" data-theme="purple">
+          <div class="theme-swatch" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)"></div>
+          <div class="name">深紫</div>
+        </div>
+        <div class="theme-item" data-theme="blue">
+          <div class="theme-swatch" style="background:linear-gradient(135deg,#3b82f6,#06b6d4)"></div>
+          <div class="name">深蓝</div>
+        </div>
+        <div class="theme-item" data-theme="orange">
+          <div class="theme-swatch" style="background:linear-gradient(135deg,#f97316,#f59e0b)"></div>
+          <div class="name">暖橙</div>
+        </div>
+        <div class="theme-item" data-theme="green">
+          <div class="theme-swatch" style="background:linear-gradient(135deg,#10b981,#14b8a6)"></div>
+          <div class="name">赛博绿</div>
+        </div>
+        <div class="theme-item" data-theme="rose">
+          <div class="theme-swatch" style="background:linear-gradient(135deg,#ec4899,#f43f5e)"></div>
+          <div class="name">玫红</div>
+        </div>
+      </div>
+      <div class="help-text">选择后会实时预览，保存配置后生效</div>
+    </div>
+
+    <!-- 配置导入导出 -->
+    <div class="card">
+      <h2>💾 配置导入 / 导出</h2>
+      <div class="help-text" style="margin-bottom:10px">
+        导出当前所有设置（直播间配置、答题设置、主题，<b>不包含题目</b>）为 JSON 文件，方便备份或迁移。
+      </div>
+      <div class="config-actions">
+        <button class="btn btn-primary" id="btn-export-config">导出配置</button>
+        <button class="btn btn-accent" id="btn-import-config">导入配置</button>
+        <input type="file" id="config-file-input" class="file-input" accept=".json">
       </div>
     </div>
 
@@ -108,6 +192,7 @@
   </div>
 
   <script src="./js/storage.js"></script>
+  <script src="./DouyinLiveWS.js"></script>
   <script src="./js/settings.js"></script>
 </body>
 </html>

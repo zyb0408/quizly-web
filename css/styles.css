@@ -15,6 +15,29 @@
   --warning: #f59e0b;
   --radius: 14px;
   --gap: 10px;
+  --stage-grad: linear-gradient(160deg, #0f172a 0%, #1e1b4b 100%);
+}
+
+/* ===== 主题切换 ===== */
+html[data-theme="purple"] {
+  --primary: #6366f1; --primary-dark: #4f46e5; --accent: #8b5cf6;
+  --stage-grad: linear-gradient(160deg, #0f172a 0%, #1e1b4b 100%);
+}
+html[data-theme="blue"] {
+  --primary: #3b82f6; --primary-dark: #2563eb; --accent: #06b6d4;
+  --stage-grad: linear-gradient(160deg, #0c1426 0%, #0e2a4a 100%);
+}
+html[data-theme="orange"] {
+  --primary: #f97316; --primary-dark: #ea580c; --accent: #f59e0b;
+  --stage-grad: linear-gradient(160deg, #1a1208 0%, #3a1f08 100%);
+}
+html[data-theme="green"] {
+  --primary: #10b981; --primary-dark: #059669; --accent: #14b8a6;
+  --stage-grad: linear-gradient(160deg, #06140f 0%, #08301f 100%);
+}
+html[data-theme="rose"] {
+  --primary: #ec4899; --primary-dark: #db2777; --accent: #f43f5e;
+  --stage-grad: linear-gradient(160deg, #1a0a12 0%, #3a0f20 100%);
 }
 
 html, body {
@@ -34,7 +57,7 @@ html, body {
   max-width: calc(100vh * 9 / 16);
   max-height: calc(100vw * 16 / 9);
   margin: 0 auto;
-  background: linear-gradient(160deg, #0f172a 0%, #1e1b4b 100%);
+  background: var(--stage-grad);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -228,6 +251,10 @@ html, body {
 .page-header {
   display: flex; align-items: center; gap: 12px;
   margin-bottom: 16px;
+  position: sticky; top: 0; z-index: 50;
+  background: #0f172a;
+  padding: 12px 0;
+  margin-top: -4px;
 }
 .page-header h1 { font-size: 20px; flex: 1; }
 .back-btn {
@@ -297,3 +324,53 @@ table.q-table {
   padding: 0 14px 4px;
 }
 .stats-bar b { color: var(--text); }
+
+/* ===== 开关 switch ===== */
+.switch-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; gap: 12px;
+}
+.switch-row .switch-label { flex: 1; }
+.switch-row .switch-label .title { font-size: 14px; }
+.switch-row .switch-label .desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.switch {
+  position: relative; width: 44px; height: 24px; flex-shrink: 0;
+  background: var(--bg-card-2); border-radius: 12px; cursor: pointer;
+  transition: background .2s;
+}
+.switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; transition: transform .2s;
+}
+.switch.on { background: var(--primary); }
+.switch.on::after { transform: translateX(20px); }
+
+/* 答题模式分段控件 */
+.seg {
+  display: inline-flex; background: #0f172a; border-radius: 8px; padding: 3px; gap: 2px;
+  border: 1px solid rgba(148,163,184,.15);
+}
+.seg button {
+  border: none; background: transparent; color: var(--text-dim);
+  padding: 6px 14px; font-size: 12px; border-radius: 6px; cursor: pointer; font-family: inherit;
+}
+.seg button.active { background: var(--primary); color: #fff; font-weight: 600; }
+
+/* 主题选择 */
+.theme-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+}
+.theme-item {
+  cursor: pointer; text-align: center;
+}
+.theme-swatch {
+  width: 100%; aspect-ratio: 1; border-radius: 10px;
+  border: 2px solid transparent; transition: border-color .2s, transform .15s;
+}
+.theme-item.active .theme-swatch { border-color: #fff; transform: scale(1.05); }
+.theme-item .name { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.theme-item.active .name { color: var(--text); }
+
+/* 配置导入导出区 */
+.config-actions { display: flex; gap: 8px; flex-wrap: wrap; }

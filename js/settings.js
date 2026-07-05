@@ -1,12 +1,14 @@
 /**
  * settings.js - 设置页面逻辑
- * 直播间配置 + 题目管理（导入/导出/删除/查询）
+ * 直播间配置 + 答题设置 + 主题 + 配置导入导出 + 题目管理
  */
 (function () {
   "use strict";
 
   const $ = (s) => document.querySelector(s);
-  let filteredList = []; // 当前表格展示的题目
+  let filteredList = [];
+
+  const THEMES = ["purple", "blue", "orange", "green", "rose"];
 
   /* ---------- 初始化 ---------- */
   function init() {
@@ -16,7 +18,7 @@
     bindEvents();
   }
 
-  /* ---------- 直播间配置 ---------- */
+  /* ---------- 配置加载/保存 ---------- */
   function loadConfig() {
     const cfg = Storage.getConfig();
     $("#cfg-room-name").value = cfg.roomName || "";
@@ -24,46 +26,89 @@
     $("#cfg-cookie").value = cfg.cookie || "";
     $("#cfg-host").value = cfg.host || "127.0.0.1";
     $("#cfg-port").value = cfg.port || 1088;
+    $("#cfg-countdown").value = cfg.countdown || 15;
+
+    // 答题模式
+    setSeg("#seg-answer-mode", cfg.answerMode || "manual");
+
+    // 科目答题开关
+    const subjOn = !!cfg.subjectMode;
+    $("#sw-subject-mode").classList.toggle("on", subjOn);
+    $("#subject-filter-wrap").style.display = subjOn ? "block" : "none";
+
+    // 主题
+    const theme = cfg.theme || "purple";
+    Storage.applyTheme(theme);
+    document.querySelectorAll(".theme-item").forEach((el) => {
+      el.classList.toggle("active", el.dataset.theme === theme);
+    });
   }
 
-  function saveConfig() {
-    const cfg = {
+  function collectConfig() {
+    return {
       roomName: $("#cfg-room-name").value.trim(),
       roomId: $("#cfg-room-id").value.trim(),
       cookie: $("#cfg-cookie").value.trim(),
       host: $("#cfg-host").value.trim() || "127.0.0.1",
-      port: parseInt($("#cfg-port").value) || 1088
+      port: parseInt($("#cfg-port").value) || 1088,
+      countdown: parseInt($("#cfg-countdown").value) || 15,
+      answerMode: $("#seg-answer-mode .active").dataset.val,
+      subjectMode: $("#sw-subject-mode").classList.contains("on"),
+      subjectFilter: $("#cfg-subject-filter").value,
+      theme: document.querySelector(".theme-item.active")?.dataset.theme || "purple"
     };
-    Storage.saveConfig(cfg);
-    toast("配置已保存");
   }
 
+  function saveConfig(silent) {
+    const cfg = collectConfig();
+    Storage.saveConfig(cfg);
+    Storage.applyTheme(cfg.theme);
+    if (!silent) toast("配置已保存");
+    return cfg;
+  }
+
+  function setSeg(sel, val) {
+    document.querySelectorAll(sel + " button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.val === val);
+    });
+  }
+
+  /* ---------- 测试连接 ---------- */
   function testConnect() {
-    saveConfig();
+    saveConfig(true);
     const cfg = Storage.getConfig();
     if (!cfg.roomId) { toast("请先填写直播间 ID"); return; }
-    if (typeof DouyinLiveWS === "undefined") {
-      toast("SDK 未加载，无法测试"); return;
-    }
+    if (typeof DouyinLiveWS === "undefined") { toast("SDK 未加载"); return; }
     toast("正在测试连接...");
     const test = new DouyinLiveWS({
       roomId: cfg.roomId, host: cfg.host, port: cfg.port, cookie: cfg.cookie,
       autoReconnect: false
     });
     let done = false;
-    test.on("connected", () => { if (!done) { done = true; toast("连接成功 ✓"); test.destroy(); } });
-    test.on("live_status", () => { if (!done) { done = true; toast("已连接到弹幕服务 ✓"); setTimeout(() => test.destroy(), 500); } });
-    test.on("error", () => { if (!done) { done = true; toast("连接失败，请确认服务已启动"); } });
+    const finish = (ok, msg) => {
+      if (done) return; done = true;
+      toast(msg);
+      try { test.destroy(); } catch (e) {}
+    };
+    test.on("connected", () => finish(true, "连接成功 ✓"));
+    test.on("live_status", (d) => finish(true, "已连接：" + (d.message || "弹幕服务就绪")));
+    test.on("error", () => finish(false, "连接失败，请确认服务已启动"));
     test.connect();
-    setTimeout(() => { if (!done) { done = true; toast("连接超时，请确认服务已启动"); test.destroy(); } }, 5000);
+    setTimeout(() => finish(false, "连接超时，请确认服务已启动"), 5000);
   }
 
   /* ---------- 题目管理 ---------- */
   function renderSubjects() {
     const subjects = [...new Set(Storage.getQuestions().map((q) => q.subject).filter(Boolean))];
-    const sel = $("#filter-subject");
-    sel.innerHTML = '<option value="">全部</option>' +
+    const optHTML = (sel) =>
+      '<option value="">全部</option>' +
       subjects.map((s) => `<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`).join("");
+    $("#filter-subject").innerHTML = optHTML();
+    // 答题科目下拉（不含"全部"）
+    const cur = Storage.getConfig().subjectFilter;
+    $("#cfg-subject-filter").innerHTML =
+      '<option value="">请选择科目</option>' +
+      subjects.map((s) => `<option value="${escapeAttr(s)}"${s === cur ? " selected" : ""}>${escapeHtml(s)}</option>`).join("");
   }
 
   function queryAndRender() {
@@ -76,7 +121,7 @@
   function renderTable(list) {
     const tbody = $("#q-tbody");
     if (!list.length) {
-      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">暂无题目，请导入或前往导入 CSV/JSON</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" class="empty-state">暂无题目，请导入 CSV/JSON</td></tr>`;
     } else {
       tbody.innerHTML = list.map((q) => `
         <tr data-id="${escapeAttr(q.id)}">
@@ -98,7 +143,7 @@
     $("#check-all").checked = false;
   }
 
-  /* ---------- 导入 ---------- */
+  /* ---------- 题目导入 ---------- */
   function handleImport() {
     const input = $("#file-input");
     input.onchange = (e) => {
@@ -126,6 +171,8 @@
         toast(`导入完成：新增 ${res.added}，跳过 ${res.skipped}，共 ${res.total} 题`);
         renderSubjects();
         queryAndRender();
+        // 导入后滚动回顶部，便于返回主页
+        window.scrollTo({ top: 0, behavior: "smooth" });
       };
       reader.readAsText(file, "UTF-8");
       input.value = "";
@@ -133,7 +180,7 @@
     input.click();
   }
 
-  /* ---------- 导出 ---------- */
+  /* ---------- 题目导出 ---------- */
   function exportFile(filename, content, mime) {
     const blob = new Blob(["\ufeff" + content], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -144,7 +191,7 @@
     toast("已导出 " + filename);
   }
 
-  /* ---------- 删除 ---------- */
+  /* ---------- 题目删除 ---------- */
   function deleteSelected() {
     const ids = [...document.querySelectorAll(".row-check:checked")].map((c) => c.dataset.id);
     if (!ids.length) { toast("请先勾选要删除的题目"); return; }
@@ -172,9 +219,38 @@
     queryAndRender();
   }
 
-  /* ---------- 事件 ---------- */
+  /* ---------- 配置导入导出 ---------- */
+  function exportConfig() {
+    saveConfig(true);
+    exportFile("答题配置.json", Storage.exportConfig(), "application/json");
+  }
+
+  function importConfig() {
+    const input = $("#config-file-input");
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          Storage.importConfig(ev.target.result);
+          loadConfig();
+          renderSubjects();
+          toast("配置导入成功");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } catch (err) {
+          toast("配置文件解析失败：" + err.message);
+        }
+      };
+      reader.readAsText(file, "UTF-8");
+      input.value = "";
+    };
+    input.click();
+  }
+
+  /* ---------- 事件绑定 ---------- */
   function bindEvents() {
-    $("#btn-save-config").addEventListener("click", saveConfig);
+    $("#btn-save-config").addEventListener("click", () => saveConfig(false));
     $("#btn-test-config").addEventListener("click", testConnect);
     $("#btn-import-csv").addEventListener("click", handleImport);
     $("#btn-import-json").addEventListener("click", handleImport);
@@ -188,17 +264,40 @@
     $("#filter-keyword").addEventListener("keyup", (e) => {
       if (e.key === "Enter") queryAndRender();
     });
-
-    // 全选
     $("#check-all").addEventListener("change", (e) => {
       document.querySelectorAll(".row-check").forEach((c) => (c.checked = e.target.checked));
     });
-
-    // 表格删除按钮（事件委托）
     $("#q-tbody").addEventListener("click", (e) => {
       const btn = e.target.closest('[data-act="del"]');
       if (btn) deleteOne(btn.dataset.id);
     });
+
+    // 答题模式分段
+    $("#seg-answer-mode").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (b) setSeg("#seg-answer-mode", b.dataset.val);
+    });
+
+    // 科目答题开关
+    $("#sw-subject-mode").addEventListener("click", () => {
+      const sw = $("#sw-subject-mode");
+      const on = !sw.classList.contains("on");
+      sw.classList.toggle("on", on);
+      $("#subject-filter-wrap").style.display = on ? "block" : "none";
+    });
+
+    // 主题选择（实时预览）
+    $("#theme-grid").addEventListener("click", (e) => {
+      const item = e.target.closest(".theme-item");
+      if (!item) return;
+      document.querySelectorAll(".theme-item").forEach((el) => el.classList.remove("active"));
+      item.classList.add("active");
+      Storage.applyTheme(item.dataset.theme);
+    });
+
+    // 配置导入导出
+    $("#btn-export-config").addEventListener("click", exportConfig);
+    $("#btn-import-config").addEventListener("click", importConfig);
   }
 
   /* ---------- 工具 ---------- */

@@ -1,5 +1,5 @@
 // Service Worker - 直播答题 PWA 离线支持
-const CACHE_NAME = "quiz-pwa-v1";
+const CACHE_NAME = "quiz-pwa-v2";
 const CACHE_URLS = [
   "./",
   "./index.html",

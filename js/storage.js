@@ -24,6 +24,23 @@ const Storage = {
     localStorage.setItem(this.KEYS.CONFIG, JSON.stringify(merged));
     return merged;
   },
+  /** 导出配置（不含题目），返回 JSON 字符串 */
+  exportConfig() {
+    return JSON.stringify(this.getConfig(), null, 2);
+  },
+  /** 导入配置 JSON（合并覆盖） */
+  importConfig(jsonStr, replace = false) {
+    let incoming = {};
+    if (typeof jsonStr === "string") incoming = JSON.parse(jsonStr);
+    else if (typeof jsonStr === "object") incoming = jsonStr;
+    const merged = replace ? incoming : { ...this.getConfig(), ...incoming };
+    localStorage.setItem(this.KEYS.CONFIG, JSON.stringify(merged));
+    return merged;
+  },
+  /** 应用主题（在 <html> 上设置 data-theme） */
+  applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme || "purple");
+  },
 
   /* ---------- 题目库 ---------- */
   getQuestions() {

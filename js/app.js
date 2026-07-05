@@ -5,13 +5,14 @@
 (function () {
   "use strict";
 
-  const COUNTDOWN_SECONDS = 15; // 默认答题时长
   const CORRECT_SCORE = 10;     // 答对基础分
+  const AUTO_NEXT_DELAY = 3000; // 自动模式下倒计时结束后等待时长
 
   // 题库与配置
   let questions = [];
   let currentIdx = 0;
   let config = {};
+  let countdownSec = 15;        // 倒计时秒数（从配置读取）
 
   // 答题状态
   let answering = false;        // 是否正在答题（倒计时中）
@@ -43,11 +44,25 @@
   /* ---------- 初始化 ---------- */
   function init() {
     config = Storage.getConfig();
-    questions = Storage.getQuestions();
-    currentIdx = Storage.getCurrentIndex();
+    countdownSec = config.countdown || 15;
+
+    // 应用主题
+    Storage.applyTheme(config.theme || "purple");
+
+    // 构建答题列表（科目过滤 / 全部随机）
+    questions = buildPlayList();
+    currentIdx = config.subjectMode ? (Storage.getCurrentIndex() || 0) : 0;
 
     // 直播间名称
     elRoomName.textContent = config.roomName || "未配置直播间";
+
+    // 模式提示
+    const modeTip = config.answerMode === "auto" ? "自动答题" : "手动答题";
+    const subjTip = config.subjectMode
+      ? `· 科目：${config.subjectFilter || "未选"}`
+      : "· 随机答题";
+    elHint.innerHTML = `<b>${modeTip}</b> ${subjTip} · 点击开始答题`;
+    elTimerNum.textContent = countdownSec;
 
     // 注册 Service Worker (PWA)
     if ("serviceWorker" in navigator) {
@@ -60,6 +75,26 @@
     renderLeaderboard();
     bindEvents();
     connectLive();
+  }
+
+  /* ---------- 构建答题列表 ---------- */
+  function buildPlayList() {
+    let list = Storage.getQuestions();
+    if (config.subjectMode && config.subjectFilter) {
+      list = list.filter((q) => q.subject === config.subjectFilter);
+    } else if (!config.subjectMode) {
+      // 关闭科目答题 → 全部题目随机打乱
+      list = shuffle([...list]);
+    }
+    return list;
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
   }
 
   /* ---------- 连接直播间弹幕 ---------- */
@@ -109,7 +144,7 @@
       optionCounts[content] = (optionCounts[content] || 0) + 1;
       if (correct) {
         // 剩余时间越多得分越高
-        const bonus = Math.round((timeLeft / COUNTDOWN_SECONDS) * CORRECT_SCORE);
+        const bonus = Math.round((timeLeft / countdownSec) * CORRECT_SCORE);
         Storage.addScore(nickname, CORRECT_SCORE + bonus);
       }
       renderOptions();
@@ -180,7 +215,7 @@
     if (!q.answer) { toast("本题未设置正确答案"); return; }
 
     answering = true;
-    timeLeft = COUNTDOWN_SECONDS;
+    timeLeft = countdownSec;
     answeredUsers.clear();
     optionCounts = { A: 0, B: 0, C: 0, D: 0 };
     elBtnStart.disabled = true;
@@ -211,19 +246,29 @@
     elHint.innerHTML = `答题结束 · 共 <b>${total}</b> 人参与，<b>${right}</b> 人答对`;
     renderOptions();
     renderStats();
+
+    // 自动答题模式：倒计时结束后自动进入下一题
+    if (config.answerMode === "auto" && currentIdx < questions.length - 1) {
+      elHint.innerHTML += ` · <b>${AUTO_NEXT_DELAY / 1000}</b> 秒后自动下一题`;
+      setTimeout(() => {
+        if (!answering) goNext();
+      }, AUTO_NEXT_DELAY);
+    } else if (config.answerMode === "auto" && currentIdx >= questions.length - 1) {
+      elHint.innerHTML += ` · 已是最后一题`;
+    }
   }
 
   function updateTimer() {
     elTimerNum.textContent = timeLeft;
     const r = 22;
     const c = 2 * Math.PI * r;
-    const pct = timeLeft / COUNTDOWN_SECONDS;
+    const pct = countdownSec > 0 ? timeLeft / countdownSec : 0;
     elTimerCircle.setAttribute("stroke-dasharray", c);
     elTimerCircle.setAttribute("stroke-dashoffset", c * (1 - pct));
     // 颜色变化
     if (timeLeft <= 3) elTimerCircle.setAttribute("stroke", "#ef4444");
-    else if (timeLeft <= 7) elTimerCircle.setAttribute("stroke", "#f59e0b");
-    else elTimerCircle.setAttribute("stroke", "#6366f1");
+    else if (timeLeft <= Math.ceil(countdownSec / 2)) elTimerCircle.setAttribute("stroke", "#f59e0b");
+    else elTimerCircle.setAttribute("stroke", primaryColor());
   }
 
   /* ---------- 排行榜 ---------- */
@@ -254,24 +299,8 @@
 
   /* ---------- 事件绑定 ---------- */
   function bindEvents() {
-    elBtnPrev.addEventListener("click", () => {
-      if (currentIdx > 0) {
-        if (questions[currentIdx]) questions[currentIdx]._revealed = false;
-        currentIdx--;
-        resetRoundUI();
-        renderQuestion();
-        renderStats();
-      }
-    });
-    elBtnNext.addEventListener("click", () => {
-      if (currentIdx < questions.length - 1) {
-        if (questions[currentIdx]) questions[currentIdx]._revealed = false;
-        currentIdx++;
-        resetRoundUI();
-        renderQuestion();
-        renderStats();
-      }
-    });
+    elBtnPrev.addEventListener("click", goPrev);
+    elBtnNext.addEventListener("click", goNext);
     elBtnStart.addEventListener("click", startAnswer);
     elBtnReset.addEventListener("click", () => {
       if (confirm("确定重置排行榜吗？所有积分将清零。")) {
@@ -288,6 +317,28 @@
     });
   }
 
+  function goPrev() {
+    if (currentIdx > 0) {
+      if (questions[currentIdx]) questions[currentIdx]._revealed = false;
+      currentIdx--;
+      resetRoundUI();
+      renderQuestion();
+      renderStats();
+    }
+  }
+
+  function goNext() {
+    if (currentIdx < questions.length - 1) {
+      if (questions[currentIdx]) questions[currentIdx]._revealed = false;
+      currentIdx++;
+      resetRoundUI();
+      renderQuestion();
+      renderStats();
+    } else {
+      toast("已是最后一题");
+    }
+  }
+
   function resetRoundUI() {
     clearInterval(timerHandle);
     answering = false;
@@ -298,6 +349,7 @@
     elBtnStart.textContent = "开始答题";
     elHint.innerHTML = `点击 <b>开始答题</b>，观众在直播间发送 A/B/C/D 即可参与`;
     updateTimer();
+    elTimerNum.textContent = countdownSec;
   }
 
   /* ---------- 工具 ---------- */
@@ -305,6 +357,10 @@
     return (s || "").toString()
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  function primaryColor() {
+    return getComputedStyle(document.documentElement).getPropertyValue("--primary").trim() || "#6366f1";
   }
 
   let toastTimer = null;
