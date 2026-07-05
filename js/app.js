@@ -18,6 +18,7 @@
   let answering = false;        // 是否正在答题（倒计时中）
   let timeLeft = 0;
   let timerHandle = null;
+  let autoNextTimer = null;     // 自动答题模式下，倒计时结束后切换下一题的定时器
   let answeredUsers = new Map(); // nickname -> { choice, correct, time }
   let optionCounts = { A: 0, B: 0, C: 0, D: 0 };
   let client = null;
@@ -218,6 +219,7 @@
 
   /* ---------- 倒计时 ---------- */
   function startAnswer() {
+    clearTimeout(autoNextTimer); // 用户手动开始答题，取消待执行的自动切换
     const q = questions[currentIdx];
     if (!q) { toast("没有题目"); return; }
     if (!q.answer) { toast("本题未设置正确答案"); return; }
@@ -255,14 +257,22 @@
     renderOptions();
     renderStats();
 
-    // 自动答题模式：倒计时结束后自动进入下一题
+    // 自动答题模式：倒计时结束后自动进入下一题并开始答题（循环）
     if (config.answerMode === "auto" && currentIdx < questions.length - 1) {
-      elHint.innerHTML += ` · <b>${AUTO_NEXT_DELAY / 1000}</b> 秒后自动下一题`;
-      setTimeout(() => {
-        if (!answering) goNext();
+      elHint.innerHTML += ` · <b>${AUTO_NEXT_DELAY / 1000}</b> 秒后自动开始下一题`;
+      autoNextTimer = setTimeout(() => {
+        if (!answering) {
+          goNext();
+          // 下一题就绪后立即开始倒计时，形成自动答题循环
+          if (questions[currentIdx] && questions[currentIdx].answer) {
+            startAnswer();
+          } else {
+            toast("下一题未设置正确答案，已暂停自动答题");
+          }
+        }
       }, AUTO_NEXT_DELAY);
     } else if (config.answerMode === "auto" && currentIdx >= questions.length - 1) {
-      elHint.innerHTML += ` · 已是最后一题`;
+      elHint.innerHTML += ` · 已是最后一题，自动答题结束`;
     }
   }
 
@@ -356,6 +366,7 @@
 
   function resetRoundUI() {
     clearInterval(timerHandle);
+    clearTimeout(autoNextTimer); // 切换题目时取消待执行的自动切换
     answering = false;
     timeLeft = 0;
     answeredUsers.clear();
