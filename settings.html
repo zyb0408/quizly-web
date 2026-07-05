@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#6366f1">
+  <title>设置 - 直播答题</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg">
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body style="background:#0f172a">
+  <div class="page">
+
+    <div class="page-header">
+      <button class="back-btn" onclick="location.href='./index.html'">‹</button>
+      <h1>设置</h1>
+    </div>
+
+    <!-- 直播间配置 -->
+    <div class="card">
+      <h2>📡 直播间配置</h2>
+      <div class="field">
+        <label>直播间名称（用于头部展示）</label>
+        <input type="text" id="cfg-room-name" placeholder="例如：知识答题直播间">
+      </div>
+      <div class="field">
+        <label>直播间 ID</label>
+        <input type="text" id="cfg-room-id" placeholder="例如：516466932480">
+      </div>
+      <div class="field">
+        <label>Cookies（选填）</label>
+        <textarea id="cfg-cookie" rows="3" placeholder="粘贴抖音 Cookie，可留空"></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>WebSocket 服务地址</label>
+          <input type="text" id="cfg-host" placeholder="127.0.0.1">
+        </div>
+        <div class="field">
+          <label>端口</label>
+          <input type="number" id="cfg-port" placeholder="1088">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-save-config">保存配置</button>
+        <button class="btn btn-ghost" id="btn-test-config">测试连接</button>
+      </div>
+    </div>
+
+    <!-- 题目管理 -->
+    <div class="card">
+      <h2>📚 题目管理</h2>
+
+      <!-- 条件查询 -->
+      <div class="filter-bar">
+        <div class="field">
+          <label>科目</label>
+          <select id="filter-subject">
+            <option value="">全部</option>
+          </select>
+        </div>
+        <div class="field" style="min-width:160px;flex:1">
+          <label>关键词</label>
+          <input type="text" id="filter-keyword" placeholder="搜索题目/选项/序号">
+        </div>
+        <button class="btn btn-ghost" id="btn-query">查询</button>
+      </div>
+
+      <!-- 批量操作 -->
+      <div class="btn-row" style="margin-bottom:12px">
+        <button class="btn btn-accent" id="btn-import-csv">导入 CSV</button>
+        <button class="btn btn-accent" id="btn-import-json">导入 JSON</button>
+        <button class="btn btn-ghost" id="btn-export-csv">导出 CSV</button>
+        <button class="btn btn-ghost" id="btn-export-json">导出 JSON</button>
+        <button class="btn btn-danger" id="btn-delete-selected">删除选中</button>
+        <button class="btn btn-danger" id="btn-delete-all">清空全部</button>
+        <input type="file" id="file-input" class="file-input" accept=".csv,.json">
+      </div>
+
+      <div class="help-text">
+        题目字段：科目、序号、题目、选项A、选项B、选项C、选项D、正确答案（A/B/C/D）
+      </div>
+
+      <!-- 题目表格 -->
+      <div class="q-table-wrap" style="margin-top:12px;max-height:50vh;overflow:auto">
+        <table class="q-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="check-all"></th>
+              <th>科目</th>
+              <th>序号</th>
+              <th>题目</th>
+              <th>A</th>
+              <th>B</th>
+              <th>C</th>
+              <th>D</th>
+              <th>答案</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="q-tbody"></tbody>
+        </table>
+      </div>
+      <div id="q-count" class="help-text" style="margin-top:8px"></div>
+    </div>
+
+  </div>
+
+  <script src="./js/storage.js"></script>
+  <script src="./js/settings.js"></script>
+</body>
+</html>
