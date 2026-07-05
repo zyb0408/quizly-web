@@ -123,13 +123,99 @@
     <div class="card">
       <h2>💾 配置导入 / 导出</h2>
       <div class="help-text" style="margin-bottom:10px">
-        导出当前所有设置（直播间配置、答题设置、主题，<b>不包含题目</b>）为 JSON 文件，方便备份或迁移。
+        导出当前所有设置（直播间配置、答题设置、主题、LLM 配置，<b>不包含题目</b>）。出于安全，<b>API Key 不会被导出</b>，导入后需重新填写。
       </div>
       <div class="config-actions">
         <button class="btn btn-primary" id="btn-export-config">导出配置</button>
         <button class="btn btn-accent" id="btn-import-config">导入配置</button>
         <input type="file" id="config-file-input" class="file-input" accept=".json">
       </div>
+    </div>
+
+    <!-- AI 生成题目 -->
+    <div class="card">
+      <h2>🤖 AI 生成题目</h2>
+
+      <!-- LLM 配置 -->
+      <div class="field">
+        <label>API Base URL（OpenAI 兼容接口）</label>
+        <input type="text" id="llm-base-url" placeholder="https://api.openai.com/v1">
+      </div>
+      <div class="field">
+        <label>API Key</label>
+        <input type="password" id="llm-api-key" placeholder="sk-..." autocomplete="off">
+      </div>
+      <div class="row">
+        <div class="field" style="flex:1">
+          <label>模型（可获取列表或手动填写）</label>
+          <input type="text" id="llm-model" placeholder="gpt-4o-mini" list="llm-model-list">
+          <datalist id="llm-model-list"></datalist>
+        </div>
+        <div class="field" style="flex:0 0 auto;align-self:flex-end">
+          <button class="btn btn-ghost" id="btn-fetch-models">获取模型</button>
+        </div>
+      </div>
+      <div class="help-text">
+        兼容 OpenAI 接口（/chat/completions、/models）。若接口不支持跨域，请使用允许 CORS 的中转或本地代理地址。
+      </div>
+
+      <!-- 生成参数 -->
+      <div class="row" style="margin-top:14px">
+        <div class="field">
+          <label>科目</label>
+          <input type="text" id="gen-subject" placeholder="例如：历史" list="gen-subject-list">
+          <datalist id="gen-subject-list"></datalist>
+        </div>
+        <div class="field" style="max-width:120px">
+          <label>题目数量</label>
+          <input type="number" id="gen-count" value="5" min="1" max="50">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>答案分布</label>
+        <div class="seg" id="seg-dist">
+          <button data-val="even" class="active">均匀</button>
+          <button data-val="random">随机</button>
+          <button data-val="custom">自定义</button>
+        </div>
+      </div>
+
+      <div class="row" id="dist-custom" style="display:none">
+        <div class="field"><label>A 答案数</label><input type="number" id="dist-a" value="0" min="0"></div>
+        <div class="field"><label>B 答案数</label><input type="number" id="dist-b" value="0" min="0"></div>
+        <div class="field"><label>C 答案数</label><input type="number" id="dist-c" value="0" min="0"></div>
+        <div class="field"><label>D 答案数</label><input type="number" id="dist-d" value="0" min="0"></div>
+      </div>
+
+      <div class="field">
+        <label>难度 / 要求（选填）</label>
+        <textarea id="gen-requirement" rows="2" placeholder="例如：面向中学生，侧重中国古代史，避免过偏知识点"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-generate">生成题目</button>
+        <button class="btn btn-accent" id="btn-import-preview" disabled>导入到题库</button>
+        <span id="gen-status" class="help-text" style="margin:0;flex:1"></span>
+      </div>
+
+      <!-- 预览 -->
+      <div class="q-table-wrap" style="margin-top:12px;max-height:40vh;overflow:auto;display:none" id="preview-wrap">
+        <table class="q-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="check-all-preview"></th>
+              <th>科目</th>
+              <th>题目</th>
+              <th>A</th><th>B</th><th>C</th><th>D</th>
+              <th>答案</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
+      <div id="preview-count" class="help-text" style="margin-top:8px"></div>
     </div>
 
     <!-- 题目管理 -->

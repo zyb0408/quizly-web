@@ -7,6 +7,7 @@
 
   const $ = (s) => document.querySelector(s);
   let filteredList = [];
+  let previewList = []; // AI 生成的题目预览列表
 
   const THEMES = ["purple", "blue", "orange", "green", "rose"];
 
@@ -42,6 +43,20 @@
     document.querySelectorAll(".theme-item").forEach((el) => {
       el.classList.toggle("active", el.dataset.theme === theme);
     });
+
+    // LLM 配置
+    $("#llm-base-url").value = cfg.llmBaseUrl || "";
+    $("#llm-api-key").value = cfg.llmApiKey || "";
+    $("#llm-model").value = cfg.llmModel || "";
+
+    // 科目 datalist（生成题目用）
+    renderSubjectDatalist();
+  }
+
+  function renderSubjectDatalist() {
+    const subjects = [...new Set(Storage.getQuestions().map((q) => q.subject).filter(Boolean))];
+    $("#gen-subject-list").innerHTML =
+      subjects.map((s) => `<option value="${escapeAttr(s)}">`).join("");
   }
 
   function collectConfig() {
@@ -55,7 +70,10 @@
       answerMode: $("#seg-answer-mode .active").dataset.val,
       subjectMode: $("#sw-subject-mode").classList.contains("on"),
       subjectFilter: $("#cfg-subject-filter").value,
-      theme: document.querySelector(".theme-item.active")?.dataset.theme || "purple"
+      theme: document.querySelector(".theme-item.active")?.dataset.theme || "purple",
+      llmBaseUrl: $("#llm-base-url").value.trim(),
+      llmApiKey: $("#llm-api-key").value.trim(),
+      llmModel: $("#llm-model").value.trim()
     };
   }
 
@@ -222,7 +240,10 @@
   /* ---------- 配置导入导出 ---------- */
   function exportConfig() {
     saveConfig(true);
-    exportFile("答题配置.json", Storage.exportConfig(), "application/json");
+    // 导出时移除 API Key 等敏感信息
+    const cfg = JSON.parse(Storage.exportConfig());
+    delete cfg.llmApiKey;
+    exportFile("答题配置.json", JSON.stringify(cfg, null, 2), "application/json");
   }
 
   function importConfig() {
@@ -246,6 +267,229 @@
       input.value = "";
     };
     input.click();
+  }
+
+  /* ---------- LLM 生成题目 ---------- */
+
+  /** 获取模型列表 */
+  async function fetchModels() {
+    saveConfig(true);
+    const cfg = Storage.getConfig();
+    const baseUrl = (cfg.llmBaseUrl || "").replace(/\/+$/, "");
+    if (!baseUrl) { toast("请填写 API Base URL"); return; }
+    if (!cfg.llmApiKey) { toast("请填写 API Key"); return; }
+    toast("正在获取模型列表...");
+    try {
+      const resp = await fetch(`${baseUrl}/models`, {
+        headers: { Authorization: `Bearer ${cfg.llmApiKey}` }
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const models = (data.data || data || [])
+        .map((m) => m.id || m.name)
+        .filter(Boolean);
+      $("#llm-model-list").innerHTML = models.map((m) => `<option value="${escapeAttr(m)}">`).join("");
+      toast(`获取到 ${models.length} 个模型`);
+      if (models.length && !cfg.llmModel) $("#llm-model").value = models[0];
+    } catch (err) {
+      toast("获取失败：" + err.message + "（可手动填写模型名）");
+    }
+  }
+
+  /** 计算答案分布 */
+  function calcDistribution(count, mode) {
+    if (mode === "custom") {
+      return {
+        A: parseInt($("#dist-a").value) || 0,
+        B: parseInt($("#dist-b").value) || 0,
+        C: parseInt($("#dist-c").value) || 0,
+        D: parseInt($("#dist-d").value) || 0
+      };
+    }
+    if (mode === "random") {
+      const dist = { A: 0, B: 0, C: 0, D: 0 };
+      const keys = ["A", "B", "C", "D"];
+      for (let i = 0; i < count; i++) dist[keys[Math.floor(Math.random() * 4)]]++;
+      return dist;
+    }
+    // even：均匀分布
+    const base = Math.floor(count / 4);
+    const rem = count - base * 4;
+    const dist = { A: base, B: base, C: base, D: base };
+    ["A", "B", "C", "D"].slice(0, rem).forEach((k) => dist[k]++);
+    return dist;
+  }
+
+  /** 生成题目 */
+  async function generateQuestions() {
+    saveConfig(true);
+    const cfg = Storage.getConfig();
+    const baseUrl = (cfg.llmBaseUrl || "").replace(/\/+$/, "");
+    if (!baseUrl) { toast("请填写 API Base URL"); return; }
+    if (!cfg.llmApiKey) { toast("请填写 API Key"); return; }
+    if (!cfg.llmModel) { toast("请填写或选择模型"); return; }
+    const subject = $("#gen-subject").value.trim();
+    if (!subject) { toast("请填写科目"); return; }
+    const count = Math.min(50, Math.max(1, parseInt($("#gen-count").value) || 5));
+    const distMode = $("#seg-dist .active").dataset.val;
+    const dist = calcDistribution(count, distMode);
+    const requirement = $("#gen-requirement").value.trim();
+
+    const status = $("#gen-status");
+    status.textContent = "生成中，请稍候...";
+    $("#btn-generate").disabled = true;
+    $("#btn-import-preview").disabled = true;
+
+    const distText = `A=${dist.A}, B=${dist.B}, C=${dist.C}, D=${dist.D}`;
+    const prompt = `请生成 ${count} 道关于「${subject}」科目的单项选择题。
+${requirement ? "额外要求：" + requirement + "\n" : ""}正确答案数量分布：${distText}（即正确答案为 A 的 ${dist.A} 题，为 B 的 ${dist.B} 题，为 C 的 ${dist.C} 题，为 D 的 ${dist.D} 题，总数 ${count}）。
+每道题必须包含字段：subject(科目，固定为"${subject}")、question(题干)、a/b/c/d(四个选项的文本)、answer(正确答案字母，取值 A/B/C/D 之一)。
+四个选项要具有迷惑性，有且只有一个正确答案。题干和选项用中文。
+严格只返回如下 JSON，不要输出任何额外文字或代码块标记：
+{"questions":[{"subject":"${subject}","question":"","a":"","b":"","c":"","d":"","answer":"A"}]}`;
+
+    try {
+      const resp = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.llmApiKey}` },
+        body: JSON.stringify({
+          model: cfg.llmModel,
+          messages: [
+            { role: "system", content: "你是题目生成助手，只返回合法 JSON 对象，不要输出任何额外文字、解释或代码块标记。" },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          response_format: { type: "json_object" }
+        })
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 200)}`);
+      }
+      const data = await resp.json();
+      const content = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || "";
+      const parsed = parseLLMJson(content);
+      if (!parsed.questions || !parsed.questions.length) throw new Error("模型未返回有效题目");
+      previewList = parsed.questions.map((q, i) => normalizePreview(q, subject, i));
+      renderPreview();
+      status.textContent = `已生成 ${previewList.length} 题，请审核后导入`;
+      $("#btn-import-preview").disabled = false;
+      toast(`生成 ${previewList.length} 题，请审核`);
+    } catch (err) {
+      status.textContent = "生成失败：" + err.message;
+      toast("生成失败：" + err.message);
+    } finally {
+      $("#btn-generate").disabled = false;
+    }
+  }
+
+  /** 容错解析模型返回的 JSON */
+  function parseLLMJson(content) {
+    try { return JSON.parse(content); } catch (e) {}
+    const m1 = content.match(/\{[\s\S]*\}/);
+    if (m1) { try { return JSON.parse(m1[0]); } catch (e) {} }
+    const m2 = content.match(/\[[\s\S]*\]/);
+    if (m2) { try { return { questions: JSON.parse(m2[0]) }; } catch (e) {} }
+    return {};
+  }
+
+  /** 规范化预览题目字段 */
+  function normalizePreview(q, subject, i) {
+    const get = (keys) => {
+      for (const k of keys) if (q[k] !== undefined && q[k] !== "") return q[k];
+      return "";
+    };
+    let answer = (get(["answer", "正确答案", "Answer"]) || "").toString().trim().toUpperCase();
+    const a = get(["a", "A", "选项A", "optionA"]);
+    const b = get(["b", "B", "选项B", "optionB"]);
+    const c = get(["c", "C", "选项C", "optionC"]);
+    const d = get(["d", "D", "选项D", "optionD"]);
+    if (answer && !["A", "B", "C", "D"].includes(answer)) {
+      if (answer === a) answer = "A";
+      else if (answer === b) answer = "B";
+      else if (answer === c) answer = "C";
+      else if (answer === d) answer = "D";
+    }
+    return {
+      id: "pv_" + Date.now() + "_" + i,
+      subject: get(["subject", "科目"]) || subject,
+      seq: get(["seq", "序号"]) || String(i + 1),
+      question: get(["question", "题目", "title"]) || "",
+      a, b, c, d, answer
+    };
+  }
+
+  /** 渲染预览表格 */
+  function renderPreview() {
+    const tbody = $("#preview-tbody");
+    $("#preview-wrap").style.display = previewList.length ? "block" : "none";
+    if (!previewList.length) {
+      tbody.innerHTML = "";
+      $("#preview-count").textContent = "";
+      return;
+    }
+    const inputStyle = "width:100%;padding:3px 4px;font-size:11px;background:#0f172a;color:var(--text);border:1px solid rgba(148,163,184,.2);border-radius:4px";
+    tbody.innerHTML = previewList.map((q) => `
+      <tr data-id="${escapeAttr(q.id)}">
+        <td><input type="checkbox" class="pv-check" data-id="${escapeAttr(q.id)}" checked></td>
+        <td><input class="pv-edit" data-field="subject" value="${escapeAttr(q.subject)}" style="${inputStyle};width:70px"></td>
+        <td class="content"><input class="pv-edit" data-field="question" value="${escapeAttr(q.question)}" style="${inputStyle}"></td>
+        <td class="content"><input class="pv-edit" data-field="a" value="${escapeAttr(q.a)}" style="${inputStyle};min-width:70px"></td>
+        <td class="content"><input class="pv-edit" data-field="b" value="${escapeAttr(q.b)}" style="${inputStyle};min-width:70px"></td>
+        <td class="content"><input class="pv-edit" data-field="c" value="${escapeAttr(q.c)}" style="${inputStyle};min-width:70px"></td>
+        <td class="content"><input class="pv-edit" data-field="d" value="${escapeAttr(q.d)}" style="${inputStyle};min-width:70px"></td>
+        <td><select class="pv-edit" data-field="answer" style="padding:3px;font-size:11px;background:#0f172a;color:var(--text);border:1px solid rgba(148,163,184,.2);border-radius:4px">
+          ${["A", "B", "C", "D"].map((x) => `<option ${x === q.answer ? "selected" : ""}>${x}</option>`).join("")}
+        </select></td>
+        <td><button class="btn btn-danger" style="padding:3px 8px;font-size:11px" data-act="pv-del" data-id="${escapeAttr(q.id)}">删除</button></td>
+      </tr>
+    `).join("");
+    updatePreviewCount();
+  }
+
+  function updatePreviewCount() {
+    const checked = document.querySelectorAll(".pv-check:checked").length;
+    $("#preview-count").textContent = `预览 ${previewList.length} 题（已勾选 ${checked} 题）`;
+  }
+
+  /** 同步预览表格的编辑值到 previewList */
+  function syncPreviewEdits() {
+    document.querySelectorAll(".pv-edit").forEach((el) => {
+      const tr = el.closest("tr");
+      const id = tr.dataset.id;
+      const field = el.dataset.field;
+      const item = previewList.find((q) => q.id === id);
+      if (item) item[field] = el.value;
+    });
+  }
+
+  /** 删除预览题目 */
+  function deletePreview(id) {
+    syncPreviewEdits();
+    previewList = previewList.filter((q) => q.id !== id);
+    renderPreview();
+    if (!previewList.length) $("#btn-import-preview").disabled = true;
+  }
+
+  /** 导入预览题目到题库 */
+  function importPreview() {
+    syncPreviewEdits();
+    const checkedIds = [...document.querySelectorAll(".pv-check:checked")].map((c) => c.dataset.id);
+    const rows = previewList.filter((q) => checkedIds.includes(q.id));
+    if (!rows.length) { toast("请至少勾选一道题目"); return; }
+    const res = Storage.importQuestions(rows, false);
+    toast(`已导入 ${res.added} 题（跳过重复 ${res.skipped}）`);
+    renderSubjects();
+    queryAndRender();
+    renderSubjectDatalist();
+    previewList = previewList.filter((q) => !checkedIds.includes(q.id));
+    renderPreview();
+    if (!previewList.length) {
+      $("#btn-import-preview").disabled = true;
+      $("#gen-status").textContent = `已导入 ${res.added} 题到题库`;
+    } else {
+      $("#gen-status").textContent = `已导入 ${res.added} 题，剩余 ${previewList.length} 题待审核`;
+    }
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -315,6 +559,43 @@
     // 配置导入导出
     $("#btn-export-config").addEventListener("click", exportConfig);
     $("#btn-import-config").addEventListener("click", importConfig);
+
+    // LLM 配置项自动保存
+    ["#llm-base-url", "#llm-api-key", "#llm-model"].forEach((sel) => {
+      $(sel).addEventListener("change", () => saveConfig(true));
+    });
+
+    // 获取模型列表
+    $("#btn-fetch-models").addEventListener("click", fetchModels);
+
+    // 答案分布切换
+    $("#seg-dist").addEventListener("click", (e) => {
+      const b = e.target.closest("button");
+      if (!b) return;
+      document.querySelectorAll("#seg-dist button").forEach((x) => x.classList.toggle("active", x === b));
+      $("#dist-custom").style.display = b.dataset.val === "custom" ? "flex" : "none";
+    });
+
+    // 生成题目
+    $("#btn-generate").addEventListener("click", generateQuestions);
+
+    // 导入预览题目
+    $("#btn-import-preview").addEventListener("click", importPreview);
+
+    // 预览全选
+    $("#check-all-preview").addEventListener("change", (e) => {
+      document.querySelectorAll(".pv-check").forEach((c) => (c.checked = e.target.checked));
+      updatePreviewCount();
+    });
+
+    // 预览表格：删除 + 勾选统计
+    $("#preview-tbody").addEventListener("click", (e) => {
+      const btn = e.target.closest('[data-act="pv-del"]');
+      if (btn) deletePreview(btn.dataset.id);
+    });
+    $("#preview-tbody").addEventListener("change", (e) => {
+      if (e.target.classList.contains("pv-check")) updatePreviewCount();
+    });
   }
 
   /* ---------- 工具 ---------- */
