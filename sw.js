@@ -1,5 +1,5 @@
 // Service Worker - 直播答题 PWA 离线支持
-const CACHE_NAME = "quiz-pwa-v2";
+const CACHE_NAME = "quiz-pwa-v3";
 const CACHE_URLS = [
   "./",
   "./index.html",
@@ -38,7 +38,7 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// 请求拦截：缓存优先，网络回退
+// 请求拦截：统一 network-first（保证更新即时生效），离线回退缓存
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -47,18 +47,17 @@ self.addEventListener("fetch", (event) => {
   if (req.url.startsWith("ws://") || req.url.startsWith("wss://")) return;
 
   event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req)
-        .then((resp) => {
-          // 缓存成功的同源响应
-          if (resp.ok && new URL(req.url).origin === self.location.origin) {
-            const copy = resp.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(req, copy));
-          }
-          return resp;
-        })
-        .catch(() => caches.match("./index.html"));
-    })
+    fetch(req)
+      .then((resp) => {
+        // 缓存成功的同源响应，供离线使用
+        if (resp.ok && new URL(req.url).origin === self.location.origin) {
+          const copy = resp.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+        }
+        return resp;
+      })
+      .catch(() =>
+        caches.match(req).then((c) => c || caches.match("./index.html"))
+      )
   );
 });

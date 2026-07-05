@@ -66,9 +66,17 @@
 
     // 注册 Service Worker (PWA)
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js").catch((e) =>
-        console.warn("SW 注册失败:", e)
-      );
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register("./sw.js").then((reg) => {
+        reg.update();
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          // 仅在更新场景（之前已有 controller）刷新一次，避免首次注册循环
+          if (hadController && !sessionStorage.getItem("sw_reloaded")) {
+            sessionStorage.setItem("sw_reloaded", "1");
+            location.reload();
+          }
+        });
+      }).catch((e) => console.warn("SW 注册失败:", e));
     }
 
     renderQuestion();
@@ -292,6 +300,11 @@
   function renderStats() {
     const q = questions[currentIdx];
     if (!q) { elStats.innerHTML = ""; return; }
+    const revealed = q._revealed;
+    if (!revealed) {
+      elStats.innerHTML = `<b>等待开始答题</b>`;
+      return;
+    }
     const total = answeredUsers.size;
     const right = [...answeredUsers.values()].filter((a) => a.correct).length;
     elStats.innerHTML = `本题参与 <b>${total}</b> · 答对 <b>${right}</b> · 正确答案 <b style="color:#22c55e">${q.answer || "-"}</b>`;
@@ -321,6 +334,7 @@
     if (currentIdx > 0) {
       if (questions[currentIdx]) questions[currentIdx]._revealed = false;
       currentIdx--;
+      if (questions[currentIdx]) questions[currentIdx]._revealed = false;
       resetRoundUI();
       renderQuestion();
       renderStats();
@@ -331,6 +345,7 @@
     if (currentIdx < questions.length - 1) {
       if (questions[currentIdx]) questions[currentIdx]._revealed = false;
       currentIdx++;
+      if (questions[currentIdx]) questions[currentIdx]._revealed = false;
       resetRoundUI();
       renderQuestion();
       renderStats();

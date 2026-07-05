@@ -250,11 +250,12 @@ html, body {
 }
 .page-header {
   display: flex; align-items: center; gap: 12px;
-  margin-bottom: 16px;
   position: sticky; top: 0; z-index: 50;
-  background: #0f172a;
-  padding: 12px 0;
-  margin-top: -4px;
+  background: var(--bg-dark);
+  padding: 12px 16px;
+  margin: 0 -16px 16px;
+  border-bottom: 1px solid rgba(148,163,184,.12);
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
 }
 .page-header h1 { font-size: 20px; flex: 1; }
 .back-btn {

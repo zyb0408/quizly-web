@@ -272,27 +272,44 @@
       if (btn) deleteOne(btn.dataset.id);
     });
 
-    // 答题模式分段
+    // 答题模式分段（自动保存）
     $("#seg-answer-mode").addEventListener("click", (e) => {
       const b = e.target.closest("button");
-      if (b) setSeg("#seg-answer-mode", b.dataset.val);
+      if (b) {
+        setSeg("#seg-answer-mode", b.dataset.val);
+        saveConfig(true);
+        toast("答题模式已保存：" + (b.dataset.val === "auto" ? "自动" : "手动"));
+      }
     });
 
-    // 科目答题开关
+    // 科目答题开关（自动保存）
     $("#sw-subject-mode").addEventListener("click", () => {
       const sw = $("#sw-subject-mode");
       const on = !sw.classList.contains("on");
       sw.classList.toggle("on", on);
       $("#subject-filter-wrap").style.display = on ? "block" : "none";
+      saveConfig(true);
+      toast(on ? "已开启科目答题" : "已关闭科目答题（随机）");
     });
 
-    // 主题选择（实时预览）
+    // 科目选择 / 倒计时（自动保存）
+    $("#cfg-subject-filter").addEventListener("change", () => { saveConfig(true); toast("科目已保存"); });
+    $("#cfg-countdown").addEventListener("change", () => { saveConfig(true); toast("倒计时已保存"); });
+
+    // 主题选择（实时预览 + 自动保存）
     $("#theme-grid").addEventListener("click", (e) => {
       const item = e.target.closest(".theme-item");
       if (!item) return;
       document.querySelectorAll(".theme-item").forEach((el) => el.classList.remove("active"));
       item.classList.add("active");
       Storage.applyTheme(item.dataset.theme);
+      saveConfig(true);
+      toast("主题已保存");
+    });
+
+    // 直播间配置项失焦自动保存
+    ["#cfg-room-name", "#cfg-room-id", "#cfg-cookie", "#cfg-host", "#cfg-port"].forEach((sel) => {
+      $(sel).addEventListener("change", () => saveConfig(true));
     });
 
     // 配置导入导出
