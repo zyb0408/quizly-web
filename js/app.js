@@ -40,7 +40,6 @@
   const elBtnReset = $("#btn-reset");
   const elLbList = $("#lb-list");
   const elStats = $("#stats-bar");
-  const elLiveBadge = $("#live-badge");
 
   /* ---------- 初始化 ---------- */
   function init() {
@@ -125,8 +124,6 @@
     client.on("connected", () => setConnStatus(true, "已连接弹幕服务"));
     client.on("live_status", (data) => {
       setConnStatus(!!data.live, data.message || (data.live ? "直播中" : "未开播"));
-      if (data.live) elLiveBadge.style.display = "block";
-      else elLiveBadge.style.display = "none";
     });
     client.on("disconnected", () => setConnStatus(false, "连接断开，重连中..."));
     client.on("WebcastChatMessage", onChatMessage);
@@ -257,6 +254,9 @@
     renderOptions();
     renderStats();
 
+    // 显示答案揭晓全屏动画
+    showRevealOverlay(q);
+
     // 自动答题模式：倒计时结束后自动进入下一题并开始答题（循环）
     if (config.answerMode === "auto" && currentIdx < questions.length - 1) {
       elHint.innerHTML += ` · <b>${AUTO_NEXT_DELAY / 1000}</b> 秒后自动开始下一题`;
@@ -274,6 +274,39 @@
     } else if (config.answerMode === "auto" && currentIdx >= questions.length - 1) {
       elHint.innerHTML += ` · 已是最后一题，自动答题结束`;
     }
+  }
+
+  /* ---------- 答案揭晓全屏遮罩 ---------- */
+  function showRevealOverlay(q) {
+    if (!q || !q.answer) return;
+    
+    const overlay = document.createElement("div");
+    overlay.className = "reveal-overlay";
+    overlay.innerHTML = `
+      <div class="reveal-content">
+        <div class="reveal-question">${escapeHtml(q.question)}</div>
+        <div class="reveal-answer">正确答案：${q.answer}</div>
+      </div>
+      <div class="reveal-countdown">3 秒后继续...</div>
+    `;
+    document.body.appendChild(overlay);
+
+    let countdown = 3;
+    const countdownEl = overlay.querySelector(".reveal-countdown");
+    const countdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown > 0) {
+        countdownEl.textContent = countdown + " 秒后继续...";
+      }
+    }, 1000);
+
+    setTimeout(() => {
+      clearInterval(countdownInterval);
+      overlay.style.animation = "fadeIn 0.2s ease-out reverse";
+      setTimeout(() => {
+        overlay.remove();
+      }, 200);
+    }, 3000);
   }
 
   function updateTimer() {

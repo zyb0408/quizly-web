@@ -80,26 +80,6 @@ html, body {
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(99,102,241,.2);
 }
-.live-preview {
-  width: 64px;
-  height: 96px;       /* 直播画面预留 2:3 小窗 */
-  border-radius: 8px;
-  background: #000;
-  flex-shrink: 0;
-  overflow: hidden;
-  position: relative;
-  border: 1px solid rgba(255,255,255,.1);
-}
-.live-preview .placeholder {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--text-dim); font-size: 11px; text-align: center;
-}
-.live-badge {
-  position: absolute; top: 4px; left: 4px;
-  background: #ef4444; color: #fff; font-size: 9px;
-  padding: 1px 5px; border-radius: 4px; font-weight: bold;
-}
 .header-info { flex: 1; min-width: 0; }
 .room-name {
   font-size: 16px; font-weight: bold; white-space: nowrap;
@@ -126,29 +106,55 @@ html, body {
 /* ===== 题目展示区 ===== */
 .question-area {
   flex-shrink: 0;
-  padding: 12px 14px 6px;
+  padding: 16px 14px 10px;
+  animation: fadeIn 0.3s ease-out;
 }
-.q-meta { display: flex; gap: 8px; font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+.q-meta { display: flex; gap: 8px; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
 .q-meta .tag {
   background: rgba(99,102,241,.2); color: #a5b4fc;
   padding: 2px 8px; border-radius: 6px;
 }
 .q-text {
-  font-size: 17px; line-height: 1.5; font-weight: 600;
-  min-height: 50px;
+  font-size: 18px; line-height: 1.5; font-weight: 600;
+  min-height: 54px;
+  animation: slideIn 0.3s ease-out;
+}
+
+/* ===== 选项动画 ===== */
+.option {
+  animation: fadeInUp 0.3s ease-out backwards;
+}
+.option:nth-child(1) { animation-delay: 0.05s; }
+.option:nth-child(2) { animation-delay: 0.1s; }
+.option:nth-child(3) { animation-delay: 0.15s; }
+.option:nth-child(4) { animation-delay: 0.2s; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 /* ===== ABCD 选项区 ===== */
 .options {
   flex-shrink: 0;
-  padding: 6px 14px;
+  padding: 8px 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .option {
   display: flex; align-items: center; gap: 10px;
-  padding: 11px 14px;
+  padding: 12px 14px;
   border-radius: var(--radius);
   background: var(--bg-card);
   border: 2px solid transparent;
@@ -234,6 +240,47 @@ html, body {
 .lb-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-score { color: var(--correct); font-weight: bold; }
 .lb-empty { text-align: center; color: var(--text-dim); padding: 20px; font-size: 12px; }
+
+/* ===== 答案揭晓全屏遮罩 ===== */
+.reveal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, .92);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease-out;
+}
+.reveal-content {
+  text-align: center;
+  padding: 20px;
+  max-width: 90%;
+}
+.reveal-question {
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--text);
+  margin-bottom: 24px;
+  line-height: 1.5;
+  animation: slideIn 0.3s ease-out;
+}
+.reveal-answer {
+  font-size: 64px;
+  font-weight: bold;
+  color: var(--correct);
+  text-shadow: 0 0 30px rgba(34, 197, 94, .5);
+  animation: scaleIn 0.4s cubic-bezier(.175,.885,.32,1.275);
+}
+.reveal-countdown {
+  position: absolute;
+  bottom: 40px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
 
 /* ===== 通用浮层 ===== */
 .toast {
@@ -372,6 +419,32 @@ table.q-table {
 .theme-item.active .theme-swatch { border-color: #fff; transform: scale(1.05); }
 .theme-item .name { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
 .theme-item.active .name { color: var(--text); }
+
+/* 新增主题：青色 */
+html[data-theme="cyan"] {
+  --primary: #06b6d4; --primary-dark: #0891b2; --accent: #22d3ee;
+  --stage-grad: linear-gradient(160deg, #0a121a 0%, #0e2a3a 100%);
+}
+/* 新增主题：琥珀色 */
+html[data-theme="amber"] {
+  --primary: #d97706; --primary-dark: #b45309; --accent: #fbbf24;
+  --stage-grad: linear-gradient(160deg, #1a1408 0%, #3a2608 100%);
+}
+/* 新增主题：靛蓝色 */
+html[data-theme="indigo"] {
+  --primary: #4f46e5; --primary-dark: #3730a3; --accent: #6366f1;
+  --stage-grad: linear-gradient(160deg, #0f1126 0%, #1e1b4b 100%);
+}
+/* 新增主题：翡翠绿 */
+html[data-theme="emerald"] {
+  --primary: #059669; --primary-dark: #047857; --accent: #10b981;
+  --stage-grad: linear-gradient(160deg, #061410 0%, #083020 100%);
+}
+/* 新增主题：紫红色 */
+html[data-theme="fuchsia"] {
+  --primary: #c026d3; --primary-dark: #a21caf; --accent: #e879f9;
+  --stage-grad: linear-gradient(160deg, #1a0a1a 0%, #3a0f3a 100%);
+}
 
 /* 配置导入导出区 */
 .config-actions { display: flex; gap: 8px; flex-wrap: wrap; }

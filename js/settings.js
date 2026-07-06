@@ -9,7 +9,7 @@
   let filteredList = [];
   let previewList = []; // AI 生成的题目预览列表
 
-  const THEMES = ["purple", "blue", "orange", "green", "rose"];
+  const THEMES = ["purple", "blue", "orange", "green", "rose", "cyan", "amber", "indigo", "emerald", "fuchsia"];
 
   /* ---------- 初始化 ---------- */
   function init() {
